@@ -1,0 +1,34 @@
+apiVersion: meta.dev.upbound.io/v2alpha1
+kind: Project
+metadata:
+  name: flux-gitops-stack
+spec:
+  dependsOn:
+  - apiVersion: pkg.crossplane.io/v1
+    kind: Function
+    package: xpkg.crossplane.io/crossplane-contrib/function-auto-ready
+    version: '>=v0.6.4'
+  - apiVersion: pkg.crossplane.io/v1
+    kind: Provider
+    package: xpkg.crossplane.io/crossplane-contrib/provider-helm
+    version: '>=v1'
+  - apiVersion: pkg.crossplane.io/v1
+    kind: Provider
+    package: xpkg.crossplane.io/crossplane-contrib/provider-kubernetes
+    version: '>=v1'
+  - apiVersion: pkg.crossplane.io/v1
+    kind: Provider
+    package: xpkg.crossplane.io/crossplane-contrib/provider-upjet-github
+    version: '>=v0.19.0'
+  description: GitOps stack deploying Flux via Helm, creating a GitHub repository,
+    and wiring Flux GitRepository and Kustomization resources to sync from it.
+  license: Apache-2.0
+  maintainer: Patrick Lee Scott <pat@patscott.io>
+  readme: |
+    # flux-gitops-stack
+
+    Deploys a complete GitOps stack with Flux, a GitHub repository, and Flux
+    GitRepository/Kustomization resources wired to the repository for continuous
+    delivery.
+  repository: ghcr.io/hops-ops/flux-gitops-stack
+  source: github.com/hops-ops/flux-gitops-stack

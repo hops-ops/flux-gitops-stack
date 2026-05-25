@@ -1,0 +1,45 @@
+# code: language=yaml
+#
+# GitHub Repository for GitOps
+#
+
+{{- $repo := $state.repository }}
+
+---
+apiVersion: repo.github.m.upbound.io/v1alpha1
+kind: Repository
+metadata:
+  name: gitops-repository
+  annotations:
+    {{ setResourceNameAnnotation "gitops-repository" }}
+  labels: {{ $state.labels | toJson }}
+spec:
+  {{- if $repo.allowDelete }}
+  managementPolicies: {{ $state.managementPolicies | toJson }}
+  {{- else }}
+  managementPolicies: ["Observe", "Create", "Update", "LateInitialize"]
+  {{- end }}
+  forProvider:
+    name: {{ $repo.name }}
+    description: {{ $repo.description }}
+    visibility: {{ $repo.visibility }}
+    hasIssues: true
+    {{- if $repo.topics }}
+    topics:
+      {{- toYaml $repo.topics | nindent 6 }}
+    {{- end }}
+  # Create-only repo settings belong in initProvider so provider-upjet-github
+  # does not keep driving follow-up updates for initialization fields.
+  initProvider:
+    deleteBranchOnMerge: {{ $repo.deleteBranchOnMerge }}
+    {{- if $repo.template.repository }}
+    template:
+    - owner: {{ $repo.template.owner }}
+      repository: {{ $repo.template.repository }}
+      includeAllBranches: false
+    {{- else }}
+    autoInit: {{ $repo.autoInit }}
+    {{- end }}
+  providerConfigRef:
+    name: {{ $state.githubProviderConfigRef.name }}
+    kind: {{ $state.githubProviderConfigRef.kind }}

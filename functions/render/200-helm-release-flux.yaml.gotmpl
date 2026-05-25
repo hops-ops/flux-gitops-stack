@@ -1,0 +1,78 @@
+# code: language=yaml
+#
+# Helm Release: Flux
+#
+# Chart defaults:
+# - Flux CRDs installed
+# - Prometheus PodMonitor enabled
+# - Controller resources use the flux2 chart's conservative defaults
+#
+
+{{- $flux := $state.flux }}
+
+---
+apiVersion: helm.m.crossplane.io/v1beta1
+kind: Release
+metadata:
+  name: {{ $flux.name }}
+  annotations:
+    {{ setResourceNameAnnotation "flux" }}
+  labels: {{ $state.labels | toJson }}
+spec:
+  managementPolicies: {{ $state.managementPolicies | toJson }}
+  forProvider:
+    chart:
+      name: flux2
+      repository: oci://ghcr.io/fluxcd-community/charts
+      version: 2.18.3
+    namespace: {{ $flux.namespace }}
+    {{- if $flux.overrideAllValues }}
+    values:
+      {{- toYaml $flux.overrideAllValues | nindent 6 }}
+    {{- else }}
+    {{- $controllerResources := dict
+      "requests" (dict "cpu" "100m" "memory" "64Mi")
+      "limits" (dict)
+    }}
+    {{- $sourceWatcherResources := dict
+      "requests" (dict "cpu" "50m" "memory" "64Mi")
+      "limits" (dict)
+    }}
+    {{- $helmController := dict "resources" $controllerResources }}
+    {{- $imageAutomationController := dict "resources" $controllerResources }}
+    {{- $imageReflectionController := dict "resources" $controllerResources }}
+    {{- $kustomizeController := dict "resources" $controllerResources }}
+    {{- $notificationController := dict "resources" $controllerResources }}
+    {{- $sourceController := dict "resources" $controllerResources }}
+    {{- $sourceWatcher := dict "create" false "resources" $sourceWatcherResources }}
+    {{- $cli := dict }}
+    {{- $crdsMigration := dict "enabled" false }}
+    {{- if $state.nodePool.enabled }}
+      {{- range $component := list $helmController $imageAutomationController $imageReflectionController $kustomizeController $notificationController $sourceController $sourceWatcher $cli $crdsMigration }}
+        {{- $_ := set $component "nodeSelector" $state.nodePool.nodeSelector }}
+        {{- $_ := set $component "tolerations" $state.nodePool.tolerations }}
+      {{- end }}
+    {{- end }}
+    {{- $chartDefaults := dict
+      "installCRDs" true
+      "prometheus" (dict
+        "podMonitor" (dict "create" true)
+      )
+      "helmController" $helmController
+      "imageAutomationController" $imageAutomationController
+      "imageReflectionController" $imageReflectionController
+      "kustomizeController" $kustomizeController
+      "notificationController" $notificationController
+      "sourceController" $sourceController
+      "sourceWatcher" $sourceWatcher
+      "cli" $cli
+      "crds" (dict "migration" $crdsMigration)
+    }}
+    {{- $mergedValues := mergeOverwrite $chartDefaults ($flux.values | default dict) }}
+    values:
+      {{- toYaml $mergedValues | nindent 6 }}
+    {{- end }}
+  rollbackLimit: 3
+  providerConfigRef:
+    name: {{ $state.helmProviderConfigRef.name }}
+    kind: {{ $state.helmProviderConfigRef.kind }}

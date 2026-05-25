@@ -1,0 +1,127 @@
+# code: language=yaml
+#
+# Flux Kustomizations for GitOps repository paths.
+#
+# Gated on: Flux GitRepository source ready.
+#
+
+{{- $obs := $state.observed }}
+{{- $source := $state.source }}
+{{- $apps := $state.kustomizations.apps }}
+{{- $crossplane := $state.kustomizations.crossplane }}
+
+{{- if and $apps.enabled $obs.source.ready }}
+---
+apiVersion: kubernetes.m.crossplane.io/v1alpha1
+kind: Object
+metadata:
+  name: apps-kustomization
+  annotations:
+    {{ setResourceNameAnnotation "apps-kustomization" }}
+  labels: {{ $state.labels | toJson }}
+spec:
+  managementPolicies: {{ $state.managementPolicies | toJson }}
+  readiness:
+    policy: DeriveFromObject
+  forProvider:
+    manifest:
+      apiVersion: kustomize.toolkit.fluxcd.io/v1
+      kind: Kustomization
+      metadata:
+        name: {{ $apps.name }}
+        namespace: {{ $state.flux.namespace }}
+      spec:
+        interval: {{ $apps.interval }}
+        path: {{ $apps.path }}
+        prune: {{ $apps.prune }}
+        wait: {{ $apps.wait }}
+        timeout: {{ $apps.timeout }}
+        sourceRef:
+          kind: GitRepository
+          name: {{ $source.name }}
+  providerConfigRef:
+    name: {{ $state.kubernetesProviderConfigRef.name }}
+    kind: {{ $state.kubernetesProviderConfigRef.kind }}
+
+{{- if $obs.kustomizations.apps.ready }}
+---
+apiVersion: protection.crossplane.io/v1beta1
+kind: Usage
+metadata:
+  name: delete-apps-before-flux
+  annotations:
+    {{ setResourceNameAnnotation "usage-apps-before-flux" }}
+  labels: {{ $state.labels | toJson }}
+spec:
+  replayDeletion: true
+  of:
+    apiVersion: helm.m.crossplane.io/v1beta1
+    kind: Release
+    resourceRef:
+      name: {{ $state.flux.name }}
+  by:
+    apiVersion: kubernetes.m.crossplane.io/v1alpha1
+    kind: Object
+    resourceRef:
+      name: apps-kustomization
+{{- end }}
+
+{{- end }}
+
+{{- if and $crossplane.enabled $obs.source.ready }}
+---
+apiVersion: kubernetes.m.crossplane.io/v1alpha1
+kind: Object
+metadata:
+  name: crossplane-kustomization
+  annotations:
+    {{ setResourceNameAnnotation "crossplane-kustomization" }}
+  labels: {{ $state.labels | toJson }}
+spec:
+  managementPolicies: {{ $state.managementPolicies | toJson }}
+  readiness:
+    policy: DeriveFromObject
+  forProvider:
+    manifest:
+      apiVersion: kustomize.toolkit.fluxcd.io/v1
+      kind: Kustomization
+      metadata:
+        name: {{ $crossplane.name }}
+        namespace: {{ $state.flux.namespace }}
+      spec:
+        interval: {{ $crossplane.interval }}
+        path: {{ $crossplane.path }}
+        prune: {{ $crossplane.prune }}
+        wait: {{ $crossplane.wait }}
+        timeout: {{ $crossplane.timeout }}
+        sourceRef:
+          kind: GitRepository
+          name: {{ $source.name }}
+  providerConfigRef:
+    name: {{ $state.kubernetesProviderConfigRef.name }}
+    kind: {{ $state.kubernetesProviderConfigRef.kind }}
+
+{{- if $obs.kustomizations.crossplane.ready }}
+---
+apiVersion: protection.crossplane.io/v1beta1
+kind: Usage
+metadata:
+  name: delete-crossplane-before-flux
+  annotations:
+    {{ setResourceNameAnnotation "usage-crossplane-before-flux" }}
+  labels: {{ $state.labels | toJson }}
+spec:
+  replayDeletion: true
+  of:
+    apiVersion: helm.m.crossplane.io/v1beta1
+    kind: Release
+    resourceRef:
+      name: {{ $state.flux.name }}
+  by:
+    apiVersion: kubernetes.m.crossplane.io/v1alpha1
+    kind: Object
+    resourceRef:
+      name: crossplane-kustomization
+{{- end }}
+
+{{- end }}

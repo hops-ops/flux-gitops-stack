@@ -1,0 +1,26 @@
+apiVersion: hops.ops.com.ai/v1alpha1
+kind: FluxGitopsStack
+metadata:
+  name: flux-gitops
+  namespace: example-env
+spec:
+  clusterName: example-cluster
+  labels:
+    team: platform
+  repository:
+    org: hops-ops
+    name: example-cluster-gitops
+    description: GitOps repository for example-cluster
+    visibility: private
+  externalSecrets:
+    enabled: true
+    secretStoreName: default
+    githubApp:
+      secretPath: github/flux-credentials
+      appIdKey: appId
+      installationOwnerKey: installationOwner
+      privateKeyKey: privateKey
+  kustomizations:
+    apps:
+      enabled: true
+      path: ./apps

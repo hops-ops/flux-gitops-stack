@@ -1,0 +1,15 @@
+apiVersion: helm.m.crossplane.io/v1beta1
+kind: Release
+metadata:
+  name: flux
+  annotations:
+    crossplane.io/composition-resource-name: flux
+status:
+  conditions:
+  - type: Ready
+    status: "True"
+  - type: Synced
+    status: "True"
+  atProvider:
+    state: deployed
+    revision: "1"

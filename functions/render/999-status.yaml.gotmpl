@@ -1,0 +1,23 @@
+# code: language=yaml
+#
+# Output XR status
+#
+
+{{- $xr := getCompositeResource . }}
+---
+apiVersion: {{ $xr.apiVersion }}
+kind: {{ $xr.kind }}
+status:
+  ready: {{ $state.status.ready }}
+  repository:
+    url: {{ $state.status.repository.url }}
+  source:
+    ready: {{ $state.status.source.ready }}
+    revision: {{ $state.status.source.revision | default "" | quote }}
+  kustomizations:
+    apps:
+      ready: {{ $state.status.kustomizations.apps.ready }}
+      lastAppliedRevision: {{ $state.status.kustomizations.apps.lastAppliedRevision | default "" | quote }}
+    crossplane:
+      ready: {{ $state.status.kustomizations.crossplane.ready }}
+      lastAppliedRevision: {{ $state.status.kustomizations.crossplane.lastAppliedRevision | default "" | quote }}

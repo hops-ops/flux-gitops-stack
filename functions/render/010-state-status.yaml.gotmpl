@@ -1,0 +1,122 @@
+# code: language=yaml
+#
+# Extract observed state from composed resources and compute status.
+#
+
+{{- $observed := $.observed.resources | default dict }}
+
+# ==============================================================================
+# Check readiness of each composed resource
+# ==============================================================================
+
+{{- $checkReady := dict }}
+{{- range $key := list "flux" "gitops-repository" "gitops-auth-secret" "gitops-source" "apps-kustomization" "crossplane-kustomization" "nodepool-gitops" }}
+  {{- $entry := get $observed $key | default dict }}
+  {{- $resource := $entry.resource | default dict }}
+  {{- $status := $resource.status | default dict }}
+  {{- $ready := false }}
+  {{- range ($status.conditions | default list) }}
+    {{- if and (eq .type "Ready") (eq .status "True") }}
+      {{- $ready = true }}
+    {{- end }}
+  {{- end }}
+  {{- $checkReady = set $checkReady $key $ready }}
+{{- end }}
+
+# Extract repository URL from observed state.
+{{- $repoEntry := get $observed "gitops-repository" | default dict }}
+{{- $repoResource := $repoEntry.resource | default dict }}
+{{- $repoStatus := $repoResource.status | default dict }}
+{{- $repoAtProvider := $repoStatus.atProvider | default dict }}
+{{- $repoFullName := $repoAtProvider.fullName | default "" }}
+{{- $observedRepoUrl := "" }}
+{{- if $repoFullName }}
+  {{- $observedRepoUrl = printf "https://github.com/%s" $repoFullName }}
+{{- end }}
+
+# Extract Flux nested resource status from provider-kubernetes Object manifests.
+{{- $sourceEntry := get $observed "gitops-source" | default dict }}
+{{- $sourceResource := $sourceEntry.resource | default dict }}
+{{- $sourceAtProvider := (($sourceResource.status | default dict).atProvider | default dict) }}
+{{- $sourceManifestStatus := (($sourceAtProvider.manifest | default dict).status | default dict) }}
+{{- $sourceArtifact := $sourceManifestStatus.artifact | default dict }}
+
+{{- $appsEntry := get $observed "apps-kustomization" | default dict }}
+{{- $appsResource := $appsEntry.resource | default dict }}
+{{- $appsAtProvider := (($appsResource.status | default dict).atProvider | default dict) }}
+{{- $appsManifestStatus := (($appsAtProvider.manifest | default dict).status | default dict) }}
+
+{{- $crossplaneEntry := get $observed "crossplane-kustomization" | default dict }}
+{{- $crossplaneResource := $crossplaneEntry.resource | default dict }}
+{{- $crossplaneAtProvider := (($crossplaneResource.status | default dict).atProvider | default dict) }}
+{{- $crossplaneManifestStatus := (($crossplaneAtProvider.manifest | default dict).status | default dict) }}
+
+# ==============================================================================
+# Set observed state
+# ==============================================================================
+{{- $state = set $state "observed" (dict
+  "flux" (dict "ready" (get $checkReady "flux"))
+  "repository" (dict
+    "ready" (get $checkReady "gitops-repository")
+    "url" $observedRepoUrl
+  )
+  "authSecret" (dict "ready" (get $checkReady "gitops-auth-secret"))
+  "source" (dict
+    "ready" (get $checkReady "gitops-source")
+    "revision" ($sourceArtifact.revision | default "")
+  )
+  "kustomizations" (dict
+    "apps" (dict
+      "ready" (get $checkReady "apps-kustomization")
+      "lastAppliedRevision" ($appsManifestStatus.lastAppliedRevision | default "")
+    )
+    "crossplane" (dict
+      "ready" (get $checkReady "crossplane-kustomization")
+      "lastAppliedRevision" ($crossplaneManifestStatus.lastAppliedRevision | default "")
+    )
+  )
+  "nodePool" (dict "ready" (get $checkReady "nodepool-gitops"))
+) }}
+
+# ==============================================================================
+# Compute status
+# ==============================================================================
+{{- $repoUrl := $state.observed.repository.url | default $state.repository.url }}
+{{- $authReady := true }}
+{{- if $state.externalSecrets.enabled }}
+  {{- $authReady = $state.observed.authSecret.ready }}
+{{- end }}
+{{- $appsReady := true }}
+{{- if $state.kustomizations.apps.enabled }}
+  {{- $appsReady = $state.observed.kustomizations.apps.ready }}
+{{- end }}
+{{- $crossplaneReady := true }}
+{{- if $state.kustomizations.crossplane.enabled }}
+  {{- $crossplaneReady = $state.observed.kustomizations.crossplane.ready }}
+{{- end }}
+{{- $nodePoolReady := true }}
+{{- if $state.nodePool.enabled }}
+  {{- $nodePoolReady = $state.observed.nodePool.ready }}
+{{- end }}
+{{- $ready := and $state.observed.flux.ready $state.observed.repository.ready $authReady $state.observed.source.ready $appsReady $crossplaneReady $nodePoolReady }}
+
+{{- $state = set $state "status" (dict
+  "ready" $ready
+  "repository" (dict
+    "url" $repoUrl
+  )
+  "source" (dict
+    "ready" $state.observed.source.ready
+    "revision" $state.observed.source.revision
+  )
+  "kustomizations" (dict
+    "apps" (dict
+      "ready" $state.observed.kustomizations.apps.ready
+      "lastAppliedRevision" $state.observed.kustomizations.apps.lastAppliedRevision
+    )
+    "crossplane" (dict
+      "ready" $state.observed.kustomizations.crossplane.ready
+      "lastAppliedRevision" $state.observed.kustomizations.crossplane.lastAppliedRevision
+    )
+  )
+) }}

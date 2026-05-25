@@ -1,0 +1,17 @@
+apiVersion: kubernetes.m.crossplane.io/v1alpha1
+kind: Object
+metadata:
+  name: gitops-source
+  annotations:
+    crossplane.io/composition-resource-name: gitops-source
+status:
+  conditions:
+  - type: Ready
+    status: "True"
+  - type: Synced
+    status: "True"
+  atProvider:
+    manifest:
+      status:
+        artifact:
+          revision: main@sha1:1111111111111111111111111111111111111111

@@ -1,0 +1,76 @@
+# code: language=yaml
+#
+# Flux GitRepository source for the GitOps repository.
+#
+# Gated on: Flux ready, GitHub repository ready, and auth Secret ready when
+# ESO integration is enabled.
+#
+
+{{- $obs := $state.observed }}
+{{- $repo := $state.repository }}
+{{- $source := $state.source }}
+
+{{- $authReady := true }}
+{{- if $state.externalSecrets.enabled }}
+  {{- $authReady = $obs.authSecret.ready }}
+{{- end }}
+
+{{- if and $obs.flux.ready $obs.repository.ready $authReady }}
+---
+apiVersion: kubernetes.m.crossplane.io/v1alpha1
+kind: Object
+metadata:
+  name: gitops-source
+  annotations:
+    {{ setResourceNameAnnotation "gitops-source" }}
+  labels: {{ $state.labels | toJson }}
+spec:
+  managementPolicies: {{ $state.managementPolicies | toJson }}
+  readiness:
+    policy: DeriveFromObject
+  forProvider:
+    manifest:
+      apiVersion: source.toolkit.fluxcd.io/v1
+      kind: GitRepository
+      metadata:
+        name: {{ $source.name }}
+        namespace: {{ $state.flux.namespace }}
+      spec:
+        interval: {{ $source.interval }}
+        timeout: {{ $source.timeout }}
+        url: {{ $repo.url }}
+        ref:
+          branch: {{ $source.branch }}
+        {{- if $state.externalSecrets.enabled }}
+        provider: github
+        secretRef:
+          name: {{ $state.externalSecrets.secretName }}
+        {{- end }}
+  providerConfigRef:
+    name: {{ $state.kubernetesProviderConfigRef.name }}
+    kind: {{ $state.kubernetesProviderConfigRef.kind }}
+
+{{- if $obs.source.ready }}
+---
+apiVersion: protection.crossplane.io/v1beta1
+kind: Usage
+metadata:
+  name: delete-source-before-flux
+  annotations:
+    {{ setResourceNameAnnotation "usage-source-before-flux" }}
+  labels: {{ $state.labels | toJson }}
+spec:
+  replayDeletion: true
+  of:
+    apiVersion: helm.m.crossplane.io/v1beta1
+    kind: Release
+    resourceRef:
+      name: {{ $state.flux.name }}
+  by:
+    apiVersion: kubernetes.m.crossplane.io/v1alpha1
+    kind: Object
+    resourceRef:
+      name: gitops-source
+{{- end }}
+
+{{- end }}

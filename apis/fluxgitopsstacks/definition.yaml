@@ -1,0 +1,325 @@
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  name: fluxgitopsstacks.hops.ops.com.ai
+spec:
+  group: hops.ops.com.ai
+  names:
+    kind: FluxGitopsStack
+    plural: fluxgitopsstacks
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    referenceable: true
+    served: true
+    schema:
+      openAPIV3Schema:
+        description: FluxGitopsStack installs Flux, creates a GitHub repository, and wires Flux sources and kustomizations for GitOps workflows.
+        type: object
+        properties:
+          spec:
+            description: FluxGitopsStackSpec defines the desired state.
+            type: object
+            properties:
+              clusterName:
+                description: Name of the target cluster. Used as default for provider config names and repository naming.
+                type: string
+              managementPolicies:
+                description: Management policies for composed resources. Defaults to ["*"].
+                type: array
+                items:
+                  type: string
+                default:
+                - "*"
+              labels:
+                description: Custom labels applied to all managed Kubernetes resources.
+                type: object
+                additionalProperties:
+                  type: string
+                x-kubernetes-preserve-unknown-fields: true
+              helmProviderConfigRef:
+                description: Reference to the Helm ProviderConfig. Defaults to clusterName.
+                type: object
+                properties:
+                  name:
+                    description: Name of the Helm ProviderConfig.
+                    type: string
+                  kind:
+                    description: Kind of the ProviderConfig. Defaults to ProviderConfig.
+                    type: string
+                    enum:
+                    - ProviderConfig
+                    - ClusterProviderConfig
+              kubernetesProviderConfigRef:
+                description: Reference to the Kubernetes ProviderConfig for Object resources. Defaults to clusterName.
+                type: object
+                properties:
+                  name:
+                    description: Name of the Kubernetes ProviderConfig.
+                    type: string
+                  kind:
+                    description: Kind of the ProviderConfig. Defaults to ProviderConfig.
+                    type: string
+                    enum:
+                    - ProviderConfig
+                    - ClusterProviderConfig
+              githubProviderConfigRef:
+                description: Reference to the GitHub ProviderConfig. Defaults to default.
+                type: object
+                properties:
+                  name:
+                    description: Name of the GitHub ProviderConfig.
+                    type: string
+                  kind:
+                    description: Kind of the ProviderConfig. Defaults to ProviderConfig.
+                    type: string
+                    enum:
+                    - ProviderConfig
+                    - ClusterProviderConfig
+              nodePool:
+                description: Optional dedicated Karpenter NodePool for Flux controller workloads. When enabled, Flux controller pods are scheduled with workload-type=gitops and tolerate gitops=true:NoSchedule.
+                type: object
+                properties:
+                  enabled:
+                    description: Whether to create a dedicated NodePool. Defaults to false.
+                    type: boolean
+                    default: false
+                  name:
+                    description: NodePool name on the target cluster. Defaults to hops-gitops.
+                    type: string
+                  nodeClassName:
+                    description: EKS Auto Mode NodeClass to reference. Defaults to hops-default.
+                    type: string
+                  limits:
+                    description: Karpenter NodePool resource limits. Defaults to nodes=10.
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                  requirements:
+                    description: Karpenter scheduling requirements. Defaults to amd64/linux spot or on-demand nodes.
+                    type: array
+                    items:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
+                  disruption:
+                    description: Karpenter disruption settings. Defaults to WhenEmptyOrUnderutilized after 60s.
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+              namespace:
+                description: Namespace for Flux. Defaults to flux-system.
+                type: string
+                default: flux-system
+              flux:
+                description: Configuration for the Flux flux2 Helm release.
+                type: object
+                properties:
+                  name:
+                    description: Helm release name. Defaults to flux.
+                    type: string
+                  namespace:
+                    description: Namespace override for Flux. Defaults to spec.namespace.
+                    type: string
+                  values:
+                    description: Flux chart values merged with Hops defaults.
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                  overrideAllValues:
+                    description: Flux chart values that replace all Hops defaults.
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+              repository:
+                description: Configuration for the GitOps GitHub repository.
+                type: object
+                properties:
+                  org:
+                    description: GitHub organization that owns the repository.
+                    type: string
+                  name:
+                    description: Repository name. Defaults to {clusterName}-gitops.
+                    type: string
+                  description:
+                    description: Repository description.
+                    type: string
+                  visibility:
+                    description: Repository visibility. Defaults to private.
+                    type: string
+                    enum:
+                    - public
+                    - private
+                    - internal
+                  template:
+                    description: Template repository to use for initialization.
+                    type: object
+                    properties:
+                      owner:
+                        description: Owner of the template repository.
+                        type: string
+                      repository:
+                        description: Name of the template repository.
+                        type: string
+                  autoInit:
+                    description: Create an initial commit with an empty README. Defaults to true. Ignored when template is set.
+                    type: boolean
+                  topics:
+                    description: Topics for the repository.
+                    type: array
+                    items:
+                      type: string
+                  deleteBranchOnMerge:
+                    description: Automatically delete head branches on merge. Defaults to true.
+                    type: boolean
+                  allowDelete:
+                    description: Allow Crossplane to delete the repository when the XR is deleted. Defaults to false for safety.
+                    type: boolean
+                    default: false
+                required:
+                - org
+              externalSecrets:
+                description: External Secrets Operator integration for Flux GitRepository GitHub App credentials. Requires SecretStack as a prerequisite.
+                type: object
+                properties:
+                  enabled:
+                    description: Enable ESO integration. Creates an ExternalSecret that writes a Flux-compatible GitHub App Secret.
+                    type: boolean
+                    default: false
+                  secretStoreName:
+                    description: Name of the ClusterSecretStore created by SecretStack. Defaults to default.
+                    type: string
+                  secretName:
+                    description: Name of the Kubernetes Secret created for Flux GitRepository auth. Defaults to gitops-github-app.
+                    type: string
+                  githubApp:
+                    description: GitHub App credential references in AWS Secrets Manager.
+                    type: object
+                    properties:
+                      secretPath:
+                        description: AWS Secrets Manager secret name containing GitHub App credentials.
+                        type: string
+                      appIdKey:
+                        description: JSON key for the GitHub App ID within the secret. Defaults to appId.
+                        type: string
+                      installationOwnerKey:
+                        description: Optional JSON key for the GitHub App installation owner. When omitted and installationIdKey is unset, repository.org is used.
+                        type: string
+                      installationIdKey:
+                        description: Optional JSON key for the GitHub App installation ID. When set, installation owner is omitted because Flux requires exactly one of owner or ID.
+                        type: string
+                      privateKeyKey:
+                        description: JSON key for the GitHub App private key within the secret. Defaults to privateKey.
+                        type: string
+                    required:
+                    - secretPath
+              source:
+                description: Flux GitRepository source configuration.
+                type: object
+                properties:
+                  name:
+                    description: Flux GitRepository object name. Defaults to gitops.
+                    type: string
+                  branch:
+                    description: Git branch to sync. Defaults to main.
+                    type: string
+                  interval:
+                    description: Source reconciliation interval. Defaults to 5m.
+                    type: string
+                  timeout:
+                    description: Source clone timeout. Defaults to 60s.
+                    type: string
+              kustomizations:
+                description: Flux Kustomization resources to reconcile from the GitOps repository.
+                type: object
+                properties:
+                  apps:
+                    description: Kustomization that syncs application manifests from the GitOps repository.
+                    type: object
+                    properties:
+                      enabled:
+                        description: Enable the apps Kustomization. Defaults to true.
+                        type: boolean
+                      name:
+                        description: Flux Kustomization object name. Defaults to apps.
+                        type: string
+                      path:
+                        description: Path in the gitops repo to sync. Defaults to ./apps.
+                        type: string
+                      interval:
+                        description: Reconciliation interval. Defaults to 10m.
+                        type: string
+                      prune:
+                        description: Prune resources removed from git. Defaults to true.
+                        type: boolean
+                      wait:
+                        description: Wait for applied resources to become ready. Defaults to true.
+                        type: boolean
+                      timeout:
+                        description: Apply and health-check timeout. Defaults to 2m.
+                        type: string
+                  crossplane:
+                    description: Kustomization that syncs Crossplane resources from the GitOps repository.
+                    type: object
+                    properties:
+                      enabled:
+                        description: Enable the crossplane Kustomization. Defaults to false.
+                        type: boolean
+                      name:
+                        description: Flux Kustomization object name. Defaults to crossplane.
+                        type: string
+                      path:
+                        description: Path in the gitops repo to sync. Defaults to ./crossplane.
+                        type: string
+                      interval:
+                        description: Reconciliation interval. Defaults to 10m.
+                        type: string
+                      prune:
+                        description: Prune resources removed from git. Defaults to true.
+                        type: boolean
+                      wait:
+                        description: Wait for applied resources to become ready. Defaults to true.
+                        type: boolean
+                      timeout:
+                        description: Apply and health-check timeout. Defaults to 2m.
+                        type: string
+            required:
+            - clusterName
+            - repository
+          status:
+            description: FluxGitopsStackStatus defines the observed state.
+            type: object
+            properties:
+              ready:
+                description: Overall readiness of the Flux GitOps stack.
+                type: boolean
+              repository:
+                description: GitOps repository information.
+                type: object
+                properties:
+                  url:
+                    description: Full URL of the GitOps repository.
+                    type: string
+              source:
+                description: Flux GitRepository status.
+                type: object
+                properties:
+                  ready:
+                    type: boolean
+                  revision:
+                    type: string
+              kustomizations:
+                description: Flux Kustomization statuses.
+                type: object
+                properties:
+                  apps:
+                    type: object
+                    properties:
+                      ready:
+                        type: boolean
+                      lastAppliedRevision:
+                        type: string
+                  crossplane:
+                    type: object
+                    properties:
+                      ready:
+                        type: boolean
+                      lastAppliedRevision:
+                        type: string
+        required:
+        - spec

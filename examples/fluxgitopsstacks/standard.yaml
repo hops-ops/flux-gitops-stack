@@ -1,0 +1,34 @@
+apiVersion: hops.ops.com.ai/v1alpha1
+kind: FluxGitopsStack
+metadata:
+  name: flux-gitops
+  namespace: example-env
+spec:
+  clusterName: example-cluster
+  labels:
+    team: platform
+  repository:
+    org: hops-ops
+    name: example-cluster-gitops
+    description: GitOps repository for example-cluster
+    visibility: private
+    topics:
+    - gitops
+    - flux
+    template:
+      owner: hops-ops
+      repository: flux-gitops-template
+  flux:
+    values:
+      prometheus:
+        podMonitor:
+          create: true
+  source:
+    branch: main
+  kustomizations:
+    apps:
+      enabled: true
+      path: ./apps
+    crossplane:
+      enabled: true
+      path: ./crossplane
