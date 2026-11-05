@@ -127,7 +127,7 @@ _items = [
                         chart = {
                             name = "flux2"
                             repository = "oci://ghcr.io/fluxcd-community/charts"
-                            version = "2.19.1"
+                            version = "2.20.0"
                         }
                         namespace = "flux-system"
                         values.installCRDs = True
